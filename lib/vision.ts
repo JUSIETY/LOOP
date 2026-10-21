@@ -23,6 +23,7 @@ export type Recognition = {
   label: string;
   needsConfirmation: boolean;
   detail: string;
+  candidates?: {itemId: string; score: number}[];
 };
 export type EvaluationResult = {
   testCount: number;
@@ -144,74 +145,62 @@ async function extractImage(image: ImageInput, onStatus?: (message: string) => v
   return { embedding, baseline };
 }
 
-// ImageNet labels do not cover every waste class. Unmapped labels remain unknown.
-const keywordMap: { imageNet: RegExp; item: RegExp }[] = [
-  { imageNet: /water bottle|pop bottle|soda bottle/, item: /pet|페트|생수병|플라스틱.*병/i },
-  { imageNet: /beer bottle|wine bottle|whiskey jug/, item: /glass|유리/i },
-  { imageNet: /tin can/, item: /can|캔/i },
-  { imageNet: /carton/, item: /milk|carton|우유|종이팩/i },
-  { imageNet: /cardboard|crate/, item: /box|cardboard|상자|골판지/i },
-  { imageNet: /paper towel|toilet tissue|toilet paper/, item: /tissue|휴지|티슈/i },
-  { imageNet: /plastic bag/, item: /bag|snack|wrapper|비닐|과자|봉지/i },
-  { imageNet: /paper cup/, item: /cup|종이컵/i },
+// ImageNet recognizes objects, not Korean disposal rules. Never infer dirt,
+// transparency, food-use or carton lining from an object label.
+const keywordMap: { imageNet: RegExp; id: string }[] = [
+  {imageNet: /water bottle|pop bottle|soda bottle/, id: "pet-bottle"},
+  {imageNet: /beer bottle|wine bottle/, id: "glass-bottle"},
+  {imageNet: /tin can/, id: "drink-can"},
+  {imageNet: /carton|cardboard/, id: "cardboard"},
+  {imageNet: /paper towel|toilet tissue|toilet paper/, id: "used-tissue"},
+  {imageNet: /plastic bag/, id: "snack-wrapper"},
 ];
-
 export function baselinePrediction(predictions: BaselineClass[], items: VisionItem[]): Recognition {
   const scores = new Map<string, number>();
-  for (const prediction of predictions) {
-    for (const mapping of keywordMap) {
-      if (!mapping.imageNet.test(prediction.className.toLowerCase())) continue;
-      const match = items.find(item => mapping.item.test(`${item.id} ${item.name}`));
-      if (match) scores.set(match.id, (scores.get(match.id) || 0) + prediction.probability);
-    }
+  for (const p of predictions) {
+    if (!Number.isFinite(p.probability) || p.probability < 0 || p.probability > 1) continue;
+    const mapping = keywordMap.find(m => m.imageNet.test(p.className.toLowerCase()) && items.some(i => i.id === m.id));
+    if (mapping) scores.set(mapping.id, (scores.get(mapping.id) || 0) + p.probability);
   }
-  const best = [...scores].sort((a, b) => b[1] - a[1])[0];
-  return {
-    itemId: best?.[0] ?? null,
-    confidence: Math.min(1, best?.[1] ?? 0),
-    source: "baseline",
-    label: predictions[0]?.className || "인식 결과 없음",
-    needsConfirmation: !best || best[1] < 0.65,
-    detail: "범용 ImageNet 분류 결과를 부스 품목에 연결한 후보예요. 재질·오염 상태는 직접 확인해 주세요.",
-  };
+  const ranked = [...scores].sort((a,b) => b[1]-a[1]);
+  const best = ranked[0];
+  const accepted = !!best && best[1] >= 0.45 && best[1]-(ranked[1]?.[1] || 0) >= 0.15;
+  return {itemId: accepted ? best[0] : null, confidence: Math.min(1,best?.[1] || 0), source:"baseline",
+    label: predictions[0]?.className || "인식 결과 없음", needsConfirmation:true,
+    candidates:ranked.slice(0,3).map(([itemId,score])=>({itemId,score})),
+    detail:"물체 모양만 추정한 후보예요. 투명도·용도·재질·오염 상태 확인 전에는 배출 방법을 확정하지 않아요."};
 }
 
 export function nearestPrediction(embedding: number[], train: VisionSample[], items: VisionItem[]): Recognition {
-  const allowedIds = new Set(items.map(item => item.id));
-  const neighbors = train
-    .filter(sample => sample.split === "train" && sample.model === VISION_MODEL && allowedIds.has(sample.itemId) && sample.embedding.length === embedding.length)
-    .map(sample => ({ itemId: sample.itemId, score: sample.embedding.reduce((sum, value, i) => sum + value * embedding[i], 0) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3);
-  if (!neighbors.length) return { itemId: null, confidence: 0, source: "custom", label: "학습 이미지 없음", needsConfirmation: true, detail: "먼저 AI 실험실에서 품목별 학습 이미지를 추가해 주세요." };
-  const votes = new Map<string, number>();
-  let weightSum = 0;
-  for (const neighbor of neighbors) {
-    const weight = Math.exp(Math.max(-1, Math.min(1, neighbor.score)) * 8);
-    votes.set(neighbor.itemId, (votes.get(neighbor.itemId) || 0) + weight);
-    weightSum += weight;
+  const allowed = new Set(items.map(i=>i.id));
+  const groups = new Map<string,number[]>();
+  for (const s of train) {
+    if(s.split!=="train" || s.model!==VISION_MODEL || !allowed.has(s.itemId) || s.embedding.length!==embedding.length) continue;
+    const score=s.embedding.reduce((sum,v,i)=>sum+v*embedding[i],0);
+    if(Number.isFinite(score)) groups.set(s.itemId,[...(groups.get(s.itemId)||[]),score]);
   }
-  const winner = [...votes].sort((a, b) => b[1] - a[1])[0];
-  const similarity = Math.max(0, Math.min(1, neighbors.find(neighbor => neighbor.itemId === winner[0])!.score));
-  const share = winner[1] / weightSum;
-  const enoughClasses = new Set(train.map(sample => sample.itemId)).size >= 2;
-  const classSampleCount = train.filter(sample => sample.itemId === winner[0]).length;
-  return {
-    itemId: similarity < 0.35 ? null : winner[0],
-    confidence: similarity * share,
-    source: "custom",
-    label: items.find(item => item.id === winner[0])?.name || winner[0],
-    needsConfirmation: similarity < 0.65 || share < 0.7 || !enoughClasses || classSampleCount < 3,
-    detail: "직접 수집한 학습 이미지와 특징을 비교한 k-NN 후보예요. 표시값은 유사도×이웃 투표 비율이며 정답 확률이 아니에요.",
-  };
+  // Equal per-class support prevents a heavily sampled class from winning by count.
+  const ranked=[...groups].filter(([,scores])=>scores.length>=3).map(([itemId,scores])=>{
+    scores.sort((a,b)=>b-a);
+    return {itemId,score:scores.slice(0,3).reduce((a,b)=>a+b,0)/3};
+  }).sort((a,b)=>b.score-a.score);
+  const best=ranked[0];
+  const accepted=ranked.length>=2 && best.score>=0.72 && best.score-ranked[1].score>=0.08;
+  return {itemId:accepted?best.itemId:null,confidence:Math.max(0,Math.min(1,best?.score||0)),source:"custom",
+    label:best?items.find(i=>i.id===best.itemId)?.name||best.itemId:"학습 표본 부족",
+    needsConfirmation:true,candidates:ranked.slice(0,3),
+    detail:accepted?"품목별 가까운 사진 3장의 평균 유사도예요. 정답 확률이 아니며 재질·오염 상태 확인이 필요해요.":"품목당 3장·2종 이상과 충분한 유사도 차이가 필요해요. 모르는 물건은 강제로 분류하지 않아요."};
 }
 
 export async function recognizeImage(image: ImageInput, items: VisionItem[], onStatus?: (message: string) => void): Promise<Recognition> {
-  const features = await extractImage(image, onStatus);
-  // No persistent storage is necessary for the pretrained baseline to work.
-  const samples = await listSamples().catch(() => []);
-  const train = samples.filter(sample => sample.split === "train");
-  return train.length ? nearestPrediction(features.embedding, train, items) : baselinePrediction(features.baseline, items);
+  const features = await extractImage(image,onStatus);
+  const samples = await listSamples().catch(()=>[]);
+  const baseline=baselinePrediction(features.baseline,items);
+  const custom=nearestPrediction(features.embedding,samples,items);
+  if(custom.itemId && baseline.itemId && custom.itemId!==baseline.itemId)
+    return {...custom,itemId:null,detail:"기본 모델과 학습 사진의 판단이 달라요. 후보 중 실제 물건을 확인해 주세요.",candidates:[...(custom.candidates||[]),{itemId:baseline.itemId,score:baseline.confidence}].filter((v,i,a)=>a.findIndex(w=>w.itemId===v.itemId)===i).slice(0,3)};
+  if(custom.itemId) return custom;
+  return {...baseline,detail:baseline.detail+(samples.length?" 학습 사진의 근거가 부족해 기본 후보를 표시했어요.":"")};
 }
 
 async function saveSample(sample: VisionSample) {

@@ -79,7 +79,7 @@ export default function AiLab({ items, onNotice }: Props) {
     <div className="lab-stats">
       <div className="lab-stat"><small>학습 이미지</small><b>{trainCount}<small> 장</small></b><small>최근접 이웃 비교에 사용</small></div>
       <div className="lab-stat"><small>평가 이미지</small><b>{testCount}<small> 장</small></b><small>성능 측정에만 사용</small></div>
-      <div className="lab-stat"><small>등록한 품목</small><b>{trainedClasses}<small> / {items.length}</small></b><small>최소 2종 이상 권장</small></div>
+      <div className="lab-stat"><small>등록한 품목</small><b>{trainedClasses}<small> / {items.length}</small></b><small>품목별 3장 이상 · 최소 2종 필요</small></div>
     </div>
     <div className="lab-layout">
       <section className="lab-panel">
@@ -92,7 +92,7 @@ export default function AiLab({ items, onNotice }: Props) {
         <div className="lab-actions"><button className="lab-button" disabled={busy} onClick={() => void run(async () => { await loadVision(setStatus); setStatus("AI 모델 준비 완료. 챌린지에서 카메라 인식을 사용할 수 있어요."); })}>AI 모델 미리 준비</button></div>
       </section>
       <section className="lab-panel">
-        <div className="lab-smallcaps">02 / DATASET</div><h3>품목별 데이터 현황</h3><p>학습 이미지가 있으면 챌린지에서 내 데이터 기반 분류를 우선 사용해요.</p>
+        <div className="lab-smallcaps">02 / DATASET</div><h3>품목별 데이터 현황</h3><p>품목별 3장·2종 이상일 때 유사도를 비교해요. 근거가 부족하면 기본 후보로 돌아가고, 두 모델이 충돌하면 확인을 요청해요.</p>
         {items.map(item => <div className="lab-class-row" key={item.id}><span><span aria-hidden="true">{item.emoji}</span>{item.name}</span><small>학습 {samples.filter(sample => sample.itemId === item.id && sample.split === "train").length} · 평가 {samples.filter(sample => sample.itemId === item.id && sample.split === "test").length}</small></div>)}
         <div className="lab-actions"><button className="lab-button" disabled={busy || !samples.length} onClick={() => void download()}>데이터 내보내기</button><button className="lab-button" disabled={busy} onClick={() => importRef.current?.click()}>가져오기</button></div>
         <input ref={importRef} type="file" accept="application/json,.json" hidden aria-label="LOOP 학습 데이터 가져오기" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void run(async () => { if (file.size > 60_000_000) throw new Error("60MB 이하의 데이터 파일을 선택해 주세요."); const result = await importSamples(await file.text(), items.map(item => item.id)); await refresh(); setStatus(`${result.added}장 가져옴 · 중복 ${result.duplicates}장 제외`); }); }} />
