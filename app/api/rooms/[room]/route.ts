@@ -1,0 +1,4 @@
+import { body, database, failure, getRoom, json, requireAdmin, validateConfig } from '@/lib/game';
+import type {RoomContext} from '@/lib/types';
+export async function GET(_request:Request,context:RoomContext){try{const row=await getRoom((await context.params).room);return json({room:row.id,config:JSON.parse(row.config),configVersion:row.revision});}catch(e){return failure(e);}}
+export async function PUT(request:Request,context:RoomContext){try{const row=await getRoom((await context.params).room);await requireAdmin(request,row.admin_hash);const config=validateConfig((await body(request)).config);await database().prepare('UPDATE rooms SET config = ?, revision = revision + 1 WHERE id = ?').bind(JSON.stringify(config),row.id).run();const current=await getRoom(row.id);return json({room:row.id,config:JSON.parse(current.config),configVersion:current.revision});}catch(e){return failure(e);}}

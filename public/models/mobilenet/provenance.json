@@ -1,0 +1,32 @@
+{
+  "model": "MobileNet v2 alpha 1.0, ImageNet classification /2",
+  "source": "https://tfhub.dev/google/imagenet/mobilenet_v2_100_224/classification/2",
+  "retrievedAt": "2026-10-21",
+  "inputRange": [
+    0,
+    1
+  ],
+  "format": "graph-model",
+  "files": {
+    "model.json": {
+      "bytes": 86414,
+      "sha256": "62c47d7f217d49a68528ea88d4bbbf1b09d0a13892eeff14b3e41ff6878de099"
+    },
+    "group1-shard1of4.bin": {
+      "bytes": 4194304,
+      "sha256": "a37058241ca33e2427683001d5cc00a2164a41c07d7373b435594c0e7319dd68"
+    },
+    "group1-shard2of4.bin": {
+      "bytes": 4194304,
+      "sha256": "8da74e0230284f5028a979d2bd652ec569943bcb19e45ff027a923e718e75d11"
+    },
+    "group1-shard3of4.bin": {
+      "bytes": 4194304,
+      "sha256": "b7c206e89fb85fec5fe18a1bf5e0b4aa5d9c502636b60930bf1f1dae58ca9bd1"
+    },
+    "group1-shard4of4.bin": {
+      "bytes": 1373484,
+      "sha256": "109deb891cb50db7dea8c70bfd2e37e0db38de9891f63a8d5f40633645f4017d"
+    }
+  }
+}

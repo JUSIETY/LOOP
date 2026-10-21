@@ -1,0 +1,3 @@
+import { body, database, failure, getRoom, json, participantName } from '@/lib/game';
+import type {RoomContext} from '@/lib/types';
+export async function POST(request:Request,context:RoomContext){try{const row=await getRoom((await context.params).room);const name=participantName((await body(request)).name);const sessionId=crypto.randomUUID();await database().prepare('INSERT INTO sessions (id, room_id, name, config, config_version, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(sessionId,row.id,name,row.config,row.revision,new Date().toISOString()).run();return json({sessionId,name,config:JSON.parse(row.config),configVersion:row.revision},201);}catch(e){return failure(e);}}
