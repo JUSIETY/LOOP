@@ -22,6 +22,7 @@ export type Recognition = {
   confidence: number;
   source: "custom" | "baseline" | "kaggle";
   material?: string;
+  uncertain?: boolean;
   label: string;
   needsConfirmation: boolean;
   detail: string;
@@ -202,14 +203,34 @@ export async function recognizeImage(image: ImageInput, items: VisionItem[], onS
   // Local, explicitly labelled booth examples retain their fine-grained IDs.
   if(custom.itemId) return custom;
   try {
-    const head=await loadWasteHead();const result=predictMaterial(features.embedding,head);
+    const head=await loadWasteHead();
+    const full=predictMaterial(features.embedding,head);
+    let result=full;
+    const width=image instanceof HTMLImageElement?image.naturalWidth:image instanceof HTMLVideoElement?image.videoWidth:image.width;
+    const height=image instanceof HTMLImageElement?image.naturalHeight:image instanceof HTMLVideoElement?image.videoHeight:image.height;
+    // MobileNet stretches the original frame to a square. A centered square
+    // gives portrait photos a second view with less background and distortion.
+    if(!(image instanceof ImageData) && width>0 && height>0 && Math.max(width,height)/Math.min(width,height)>1.15){
+      onStatus?.("사진 가운데를 확대해 한 번 더 확인하고 있어요…");
+      const side=Math.min(width,height),canvas=document.createElement("canvas");
+      canvas.width=canvas.height=Math.min(640,side);
+      const context=canvas.getContext("2d");
+      if(context){context.drawImage(image,(width-side)/2,(height-side)/2,side,side,0,0,canvas.width,canvas.height);const cropped=await extractImage(canvas);result=predictMaterial(cropped.embedding,head);}
+    }
+    const disagreement=full.material!==result.material;
+    const accepted=result.accepted&&!disagreement;
     const labels:Record<string,string[]>={cardboard:["cardboard"],glass:["glass-bottle"],metal:["drink-can"],plastic:["pet-bottle","plastic-container"],paper:[],trash:[]};
-    const candidates=(labels[result.material]||[]).filter(id=>items.some(i=>i.id===id)).map(itemId=>({itemId,score:result.score}));
-    return {itemId:null,confidence:result.score,source:"kaggle",needsConfirmation:true,
-      material:result.accepted?result.material:undefined,label:materialNames[result.material]||result.material,
-      candidates:result.accepted?candidates:[],
-      detail:result.accepted?`Kaggle 사진으로 학습한 재질 후보: ${materialNames[result.material]}. 사진만으로 용도·오염·한국 배출 구분을 확정할 수 없어요. 아래에서 실제 품목을 선택하거나 한국 분리배출 도우미를 이용하세요.`:
-      "학습한 6종 재질 중 하나로 확정할 근거가 부족해요. 한 물건을 밝은 배경에서 다시 찍거나 직접 확인해 주세요."};
+    const materials=[result.material,...(accepted?[]:disagreement?[full.material]:result.ranked.slice(1,2).map(r=>r.material))];
+    const candidates=materials.flatMap(material=>(labels[material]||[]).map(itemId=>({itemId,score:disagreement&&material===full.material?full.score:(result.ranked.find(r=>r.material===material)?.score||0)}))).filter((c,i,a)=>items.some(item=>item.id===c.itemId)&&a.findIndex(v=>v.itemId===c.itemId)===i).slice(0,4);
+    if(!accepted){
+      for(const c of baseline.candidates||[])if(c.score>=0.05&&!candidates.some(v=>v.itemId===c.itemId))candidates.push(c);
+    }
+    return {itemId:null,confidence:result.score,source:"kaggle",needsConfirmation:true,uncertain:!accepted,
+      material:accepted?result.material:undefined,label:materials.map(m=>materialNames[m]||m).join(" · "),
+      candidates,
+      detail:accepted?`재질 후보: ${materialNames[result.material]}. 실제 품목과 재질 표시를 확인해 주세요.`:
+      disagreement?`전체 사진과 확대 사진의 판단이 달라요 (${materials.map(m=>materialNames[m]).join(" / ")}). 아래 후보에서 실제 물건을 골라 주세요. 병을 화면 가운데 크게 담으면 배경 영향을 줄일 수 있어요.`:
+      `확신이 낮은 재질 후보: ${materials.map(m=>materialNames[m]).join(" / ")}. 아래에서 실제 품목을 확인하거나 물건을 가운데 크게 놓고 다시 찍어 주세요.`};
   } catch {
     return {...baseline,detail:baseline.detail+" 폐기물 전용 분류기를 불러오지 못해 기본 모델을 사용했어요."};
   }
