@@ -1,7 +1,7 @@
 import {strict as assert} from 'node:assert';
-import {transformSync} from 'esbuild';
+import {buildSync} from 'esbuild';
 import {readFileSync} from 'node:fs';
-const load=async path=>import('data:text/javascript;base64,'+Buffer.from(transformSync(readFileSync(path,'utf8'),{loader:'ts',format:'esm'}).code).toString('base64'));
+const load=async path=>import('data:text/javascript;base64,'+Buffer.from(buildSync({entryPoints:[path],bundle:true,platform:'node',format:'esm',packages:'external',write:false}).outputFiles[0].text).toString('base64'));
 const {baselinePrediction,nearestPrediction,VISION_MODEL}=await load('lib/vision.ts');
 const {disposalRule}=await load('lib/korea-rules.ts');
 const items=[{id:'pet-bottle',name:'투명 생수병'},{id:'milk-carton',name:'살균 우유팩'},{id:'cardboard',name:'택배 상자'},{id:'dirty-paper-cup',name:'오염 종이컵'},{id:'glass-bottle',name:'유리병'}];

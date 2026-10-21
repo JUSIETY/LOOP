@@ -1,5 +1,6 @@
 "use client";
 
+import {loadWasteHead,predictMaterial,materialNames} from "./kaggle-classifier";
 import type { MobileNet } from "@tensorflow-models/mobilenet";
 
 export type VisionItem = { id: string; name: string; emoji?: string };
@@ -19,7 +20,8 @@ export type VisionSample = {
 export type Recognition = {
   itemId: string | null;
   confidence: number;
-  source: "custom" | "baseline";
+  source: "custom" | "baseline" | "kaggle";
+  material?: string;
   label: string;
   needsConfirmation: boolean;
   detail: string;
@@ -197,10 +199,20 @@ export async function recognizeImage(image: ImageInput, items: VisionItem[], onS
   const samples = await listSamples().catch(()=>[]);
   const baseline=baselinePrediction(features.baseline,items);
   const custom=nearestPrediction(features.embedding,samples,items);
-  if(custom.itemId && baseline.itemId && custom.itemId!==baseline.itemId)
-    return {...custom,itemId:null,detail:"기본 모델과 학습 사진의 판단이 달라요. 후보 중 실제 물건을 확인해 주세요.",candidates:[...(custom.candidates||[]),{itemId:baseline.itemId,score:baseline.confidence}].filter((v,i,a)=>a.findIndex(w=>w.itemId===v.itemId)===i).slice(0,3)};
+  // Local, explicitly labelled booth examples retain their fine-grained IDs.
   if(custom.itemId) return custom;
-  return {...baseline,detail:baseline.detail+(samples.length?" 학습 사진의 근거가 부족해 기본 후보를 표시했어요.":"")};
+  try {
+    const head=await loadWasteHead();const result=predictMaterial(features.embedding,head);
+    const labels:Record<string,string[]>={cardboard:["cardboard"],glass:["glass-bottle"],metal:["drink-can"],plastic:["pet-bottle","plastic-container"],paper:[],trash:[]};
+    const candidates=(labels[result.material]||[]).filter(id=>items.some(i=>i.id===id)).map(itemId=>({itemId,score:result.score}));
+    return {itemId:null,confidence:result.score,source:"kaggle",needsConfirmation:true,
+      material:result.accepted?result.material:undefined,label:materialNames[result.material]||result.material,
+      candidates:result.accepted?candidates:[],
+      detail:result.accepted?`Kaggle 사진으로 학습한 재질 후보: ${materialNames[result.material]}. 사진만으로 용도·오염·한국 배출 구분을 확정할 수 없어요. 아래에서 실제 품목을 선택하거나 한국 분리배출 도우미를 이용하세요.`:
+      "학습한 6종 재질 중 하나로 확정할 근거가 부족해요. 한 물건을 밝은 배경에서 다시 찍거나 직접 확인해 주세요."};
+  } catch {
+    return {...baseline,detail:baseline.detail+" 폐기물 전용 분류기를 불러오지 못해 기본 모델을 사용했어요."};
+  }
 }
 
 async function saveSample(sample: VisionSample) {

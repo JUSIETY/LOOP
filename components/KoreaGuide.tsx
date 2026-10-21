@@ -1,8 +1,9 @@
 'use client';
-import {useState} from 'react';
+import {useState,useEffect} from 'react';
 import {disposalRule,ruleKinds,variants,nationalSource,type RuleKind} from '../lib/korea-rules';
-export default function KoreaGuide(){
+export default function KoreaGuide({detectedMaterial}:{detectedMaterial?:string}){
  const [kind,setKind]=useState<RuleKind>('bottle');const [variant,setVariant]=useState('');const [region,setRegion]=useState('national');
+ useEffect(()=>{const map:Record<string,RuleKind>={plastic:'bottle',glass:'glass',metal:'can',cardboard:'box',paper:'paper',trash:'mixed'};if(detectedMaterial&&map[detectedMaterial]){setKind(map[detectedMaterial]);setVariant('')}},[detectedMaterial]);
  const result=disposalRule(kind,variant,region);
  return <section className="panel korea-guide" aria-labelledby="korea-heading">
  <div className="eyebrow">KOREA · 품목 + 재질 + 상태</div><h2 id="korea-heading">한국 분리배출 도우미</h2>
