@@ -27,4 +27,4 @@ export const answers = sqliteTable('answers', {
   correct: integer('correct').notNull(),
   reason: text('reason').notNull(),
   createdAt: text('created_at').notNull(),
-}, t => [uniqueIndex('answer_round').on(t.sessionId,t.round),uniqueIndex('answer_item').on(t.sessionId,t.itemId),index('answers_room').on(t.roomId)]);
+}, t => [uniqueIndex('answer_round').on(t.sessionId,t.round),index('answers_room').on(t.roomId)]);

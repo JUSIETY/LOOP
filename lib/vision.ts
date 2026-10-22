@@ -119,7 +119,7 @@ export async function loadVision(onStatus?: (message: string) => void): Promise<
         await tf.setBackend("cpu");
       }
       await tf.ready();
-      onStatus?.("앱에 포함된 MobileNet 모델을 불러오는 중이에요…");
+      onStatus?.("사진 인식을 준비하고 있어요…");
       const mobilenet = await import("@tensorflow-models/mobilenet");
       const model = await mobilenet.load({ version: 2, alpha: 1.0, modelUrl: "/models/mobilenet/model.json", inputRange: [0, 1] });
       onStatus?.("AI 모델 준비 완료");
@@ -194,7 +194,7 @@ export function nearestPrediction(embedding: number[], train: VisionSample[], it
   return {itemId:accepted?best.itemId:null,confidence:Math.max(0,Math.min(1,best?.score||0)),source:"custom",
     label:best?items.find(i=>i.id===best.itemId)?.name||best.itemId:"학습 표본 부족",
     needsConfirmation:true,candidates:ranked.slice(0,3),
-    detail:accepted?"품목별 가까운 사진 3장의 평균 유사도예요. 정답 확률이 아니며 재질·오염 상태 확인이 필요해요.":"품목당 3장·2종 이상과 충분한 유사도 차이가 필요해요. 모르는 물건은 강제로 분류하지 않아요."};
+    detail:accepted?"등록된 사진과 비슷한 품목을 찾았어요. 실제 재질과 오염 상태를 확인해 주세요.":"사진만으로 품목을 확정하기 어려워요. 실제 물건을 확인하고 직접 선택해 주세요."};
 }
 
 export function recognitionFromEmbedding(embedding:number[],head:WasteHead,items:VisionItem[]):Recognition {
@@ -237,7 +237,7 @@ export function recognitionFromEmbedding(embedding:number[],head:WasteHead,items
     }else if(disagreement){
       detail=`품목 모양은 ${head.names[fine.className]} 후보지만 재질은 ${materialNames[coarse.className]}로 추정해요. 두 판단이 달라 확인이 필요해요.`;
     }else{
-      const reason=fine.reason==="similarity"?"학습한 사진들과 형태 차이가 커요":fine.reason==="margin"?"다른 후보와 점수 차이가 작아요":"품목을 정할 만큼 점수가 높지 않아요";
+      const reason=fine.reason==="similarity"?"품목의 특징이 뚜렷하지 않아요":fine.reason==="margin"?"다른 품목과 비슷해 보여요":"품목을 확실하게 구분하기 어려워요";
       detail=`${head.names[fine.className]} 후보를 찾았지만 ${reason}. 물건 하나를 크게 다시 찍거나 실제 품목을 직접 선택해 주세요.`;
     }
     return {itemId,confidence:materialOnly?coarse.score:fine.score,source:"kaggle",needsConfirmation:true,
@@ -258,7 +258,7 @@ export async function recognizeImage(image: ImageInput, items: VisionItem[], onS
     // center crop no longer overrides a correct full-frame result.
     return recognitionFromEmbedding(features.embedding,head,items);
   }catch{
-    return {...baseline,detail:baseline.detail+" 폐기물 전용 분류기를 불러오지 못해 기본 모델을 사용했어요."};
+    return {...baseline,detail:baseline.detail+" 인식 기능 일부를 준비하지 못했어요. 실제 품목을 직접 확인해 주세요."};
   }
 }
 

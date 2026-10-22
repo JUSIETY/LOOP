@@ -9,7 +9,6 @@ export async function POST(request:Request,context:RoomContext){try{
  if(prior && (prior.item_id!==input.itemId||prior.choice!==input.choice))throw new ApiError(409,'이미 채점한 문제예요. 다음 문제로 진행해 주세요.');
  if(!prior){
   const count=await db.prepare('SELECT COUNT(*) AS n FROM answers WHERE session_id = ?').bind(input.sessionId).first<{n:number}>();if(count?.n!==input.round)throw new ApiError(409,'문제 순서가 맞지 않아요. 현재 문제부터 진행해 주세요.');
-  const duplicate=await db.prepare('SELECT id FROM answers WHERE session_id = ? AND item_id = ?').bind(input.sessionId,item.id).first();if(duplicate)throw new ApiError(409,'이미 도전한 품목이에요. 다른 품목을 골라 주세요.');
   await db.prepare(`INSERT OR IGNORE INTO answers (id,room_id,session_id,round,item_id,item_name,choice,category,correct,reason,created_at)
     SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM answers WHERE session_id = ?) = ?`).bind(crypto.randomUUID(),room.id,input.sessionId,input.round,item.id,item.name,input.choice,item.category,input.choice===item.category?1:0,item.reason,new Date().toISOString(),input.sessionId,input.round).run();
  }

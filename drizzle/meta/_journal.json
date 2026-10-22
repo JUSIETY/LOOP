@@ -8,6 +8,13 @@
       "when": 1792563123242,
       "tag": "0000_wet_retro_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792654589849,
+      "tag": "0001_gifted_madelyne_pryor",
+      "breakpoints": true
     }
   ]
 }
