@@ -129,8 +129,8 @@ export async function loadVision(onStatus?: (message: string) => void): Promise<
   }
   try {
     return await modelPromise;
-  } catch {
-    throw new Error("AI 모델을 불러오지 못했어요. 사이트 연결을 확인한 뒤 다시 시도해 주세요. 품목 직접 선택으로 챌린지는 계속할 수 있어요.");
+  } catch (cause) {
+    throw new Error("AI 모델을 불러오지 못했어요. 사이트 연결을 확인한 뒤 다시 시도해 주세요. 품목 직접 선택으로 챌린지는 계속할 수 있어요.", {cause});
   }
 }
 

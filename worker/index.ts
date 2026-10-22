@@ -23,7 +23,18 @@ const worker = {
         },
       };
     }
-    return runWithConnectorBinding(binding, () => handler.fetch(request, env, ctx));
+    return runWithConnectorBinding(binding, async () => {
+      const response = await handler.fetch(request, env, ctx);
+      // HTML must revalidate across deployments whose module filenames change.
+      // Keep immutable caching for hashed JS/CSS and other static assets.
+      if (response.headers.get('content-type')?.includes('text/html')) {
+        const headers = new Headers(response.headers);
+        headers.set('Cache-Control', 'no-store, max-age=0');
+        headers.set('CDN-Cache-Control', 'no-store');
+        return new Response(response.body, {status:response.status,statusText:response.statusText,headers});
+      }
+      return response;
+    });
   },
 };
 
