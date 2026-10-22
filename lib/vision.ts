@@ -1,6 +1,6 @@
 "use client";
 
-import {loadWasteHead,predictMaterial,materialNames} from "./kaggle-classifier";
+import {loadWasteHead,predictWaste,materialNames,type WasteHead} from "./kaggle-classifier";
 import type { MobileNet } from "@tensorflow-models/mobilenet";
 
 export type VisionItem = { id: string; name: string; emoji?: string };
@@ -23,6 +23,8 @@ export type Recognition = {
   source: "custom" | "baseline" | "kaggle";
   material?: string;
   uncertain?: boolean;
+  status?: "item" | "material" | "review";
+  alternatives?: {label: string; score: number}[];
   label: string;
   needsConfirmation: boolean;
   detail: string;
@@ -195,43 +197,67 @@ export function nearestPrediction(embedding: number[], train: VisionSample[], it
     detail:accepted?"품목별 가까운 사진 3장의 평균 유사도예요. 정답 확률이 아니며 재질·오염 상태 확인이 필요해요.":"품목당 3장·2종 이상과 충분한 유사도 차이가 필요해요. 모르는 물건은 강제로 분류하지 않아요."};
 }
 
+export function recognitionFromEmbedding(embedding:number[],head:WasteHead,items:VisionItem[]):Recognition {
+    const {fine,coarse,disagreement}=predictWaste(embedding,head);
+    const fineIds:Record<string,string[]>={
+      "drink-can":["drink-can"],cardboard:["cardboard"],"glass-bottle":["glass-bottle"],
+      "plastic-container":["plastic-container"],"plastic-bottle":["pet-bottle","plastic-container"],
+      "detergent-bottle":["plastic-container"],carton:["milk-carton"],"plastic-bag":["snack-wrapper"],
+      "paper-cup":["dirty-paper-cup"],"glass-container":["glass-bottle"],"glass-object":["glass-bottle"],
+    };
+    const coarseIds:Record<string,string[]>={
+      cardboard:["cardboard"],glass:["glass-bottle"],metal:["drink-can"],
+      plastic:["pet-bottle","plastic-container"],carton:["milk-carton"],vinyl:["snack-wrapper"],
+      paper:["cardboard","milk-carton","dirty-paper-cup"],
+    };
+    const knownFine=fine.accepted&&!disagreement;
+    const materialOnly=!knownFine&&coarse.accepted&&!disagreement;
+    const status:Recognition["status"]=knownFine?"item":materialOnly?"material":"review";
+    const label=knownFine?head.names[fine.className]||fine.className:materialOnly?materialNames[coarse.className]||coarse.className:head.names[fine.className]||fine.className;
+    const candidates:{itemId:string;score:number}[]=[];
+    const add=(ids:string[],score:number)=>{for(const itemId of ids)if(items.some(i=>i.id===itemId)&&!candidates.some(c=>c.itemId===itemId))candidates.push({itemId,score});};
+    if(knownFine) add(fineIds[fine.className]||[],fine.score);
+    else if(materialOnly) add(coarseIds[coarse.className]||[],coarse.score);
+    else for(const c of fine.ranked.slice(0,3))add(fineIds[c.className]||[],c.score);
+    // Only direct, compatible object labels preselect a booth item. A generic
+    // plastic bottle does not establish transparent beverage PET; a carton label
+    // does not distinguish sterilized milk cartons from aseptic cartons.
+    const direct:Record<string,string>={"drink-can":"drink-can",cardboard:"cardboard","glass-bottle":"glass-bottle","plastic-container":"plastic-container"};
+    const itemId=knownFine&&items.some(i=>i.id===direct[fine.className])?direct[fine.className]:null;
+    let detail:string;
+    if(knownFine){
+      detail=`${label} 품목을 인식했어요. 실제 재질 표시와 내용물·오염 상태를 확인해 주세요.`;
+      if(fine.className==="plastic-bottle")detail="플라스틱병을 인식했어요. 무색·투명한 생수·음료 PET병인지 확인하고 아래에서 골라 주세요.";
+      if(fine.className==="carton")detail="종이팩을 인식했어요. 살균 우유팩인지 멸균팩인지 실제 표시를 확인해 주세요. 아래 살균 우유팩은 해당하는 경우에만 선택하세요.";
+      if(fine.className==="paper-cup")detail="종이컵을 인식했어요. 오염 상태는 사진만으로 확정하지 않아요. 아래 심하게 오염된 종이컵은 실제 상태가 맞을 때만 고르세요.";
+      if(fine.className==="glass-object"||fine.className==="glass-container")detail="유리 물품을 인식했어요. 음료 유리병인지 확인하고, 해당하는 경우에만 아래 품목을 선택하세요.";
+      if(!itemId&&!candidates.length)detail+= " 이 품목은 현재 챌린지의 준비 품목에 없어요. 한국 분리배출 도우미에서 확인해 주세요.";
+    }else if(materialOnly){
+      detail=`${label} 범주까지 추정했어요. 세부 품목을 확정하지 못했으니 실제 물건을 선택해 주세요.`;
+    }else if(disagreement){
+      detail=`품목 모양은 ${head.names[fine.className]} 후보지만 재질은 ${materialNames[coarse.className]}로 추정해요. 두 판단이 달라 확인이 필요해요.`;
+    }else{
+      const reason=fine.reason==="similarity"?"학습한 사진들과 형태 차이가 커요":fine.reason==="margin"?"다른 후보와 점수 차이가 작아요":"품목을 정할 만큼 점수가 높지 않아요";
+      detail=`${head.names[fine.className]} 후보를 찾았지만 ${reason}. 물건 하나를 크게 다시 찍거나 실제 품목을 직접 선택해 주세요.`;
+    }
+    return {itemId,confidence:materialOnly?coarse.score:fine.score,source:"kaggle",needsConfirmation:true,
+      status,uncertain:status==="review",material:knownFine?head.coarseMapping[fine.className]:materialOnly?coarse.className:undefined,
+      label,candidates:candidates.slice(0,4),alternatives:fine.ranked.slice(0,3).map(r=>({label:head.names[r.className]||r.className,score:r.score})),detail};
+}
+
 export async function recognizeImage(image: ImageInput, items: VisionItem[], onStatus?: (message: string) => void): Promise<Recognition> {
   const features = await extractImage(image,onStatus);
   const samples = await listSamples().catch(()=>[]);
   const baseline=baselinePrediction(features.baseline,items);
   const custom=nearestPrediction(features.embedding,samples,items);
-  // Local, explicitly labelled booth examples retain their fine-grained IDs.
   if(custom.itemId) return custom;
   try {
+    onStatus?.("세부 품목과 재질을 확인하고 있어요…");
     const head=await loadWasteHead();
-    const full=predictMaterial(features.embedding,head);
-    let result=full;
-    const width=image instanceof HTMLImageElement?image.naturalWidth:image instanceof HTMLVideoElement?image.videoWidth:image.width;
-    const height=image instanceof HTMLImageElement?image.naturalHeight:image instanceof HTMLVideoElement?image.videoHeight:image.height;
-    // MobileNet stretches the original frame to a square. A centered square
-    // gives portrait photos a second view with less background and distortion.
-    if(!(image instanceof ImageData) && width>0 && height>0 && Math.max(width,height)/Math.min(width,height)>1.15){
-      onStatus?.("사진 가운데를 확대해 한 번 더 확인하고 있어요…");
-      const side=Math.min(width,height),canvas=document.createElement("canvas");
-      canvas.width=canvas.height=Math.min(640,side);
-      const context=canvas.getContext("2d");
-      if(context){context.drawImage(image,(width-side)/2,(height-side)/2,side,side,0,0,canvas.width,canvas.height);const cropped=await extractImage(canvas);result=predictMaterial(cropped.embedding,head);}
-    }
-    const disagreement=full.material!==result.material;
-    const accepted=result.accepted&&!disagreement;
-    const labels:Record<string,string[]>={cardboard:["cardboard"],glass:["glass-bottle"],metal:["drink-can"],plastic:["pet-bottle","plastic-container"],paper:[],trash:[]};
-    const materials=[result.material,...(accepted?[]:disagreement?[full.material]:result.ranked.slice(1,2).map(r=>r.material))];
-    const candidates=materials.flatMap(material=>(labels[material]||[]).map(itemId=>({itemId,score:disagreement&&material===full.material?full.score:(result.ranked.find(r=>r.material===material)?.score||0)}))).filter((c,i,a)=>items.some(item=>item.id===c.itemId)&&a.findIndex(v=>v.itemId===c.itemId)===i).slice(0,4);
-    if(!accepted){
-      for(const c of baseline.candidates||[])if(c.score>=0.05&&!candidates.some(v=>v.itemId===c.itemId))candidates.push(c);
-    }
-    return {itemId:null,confidence:result.score,source:"kaggle",needsConfirmation:true,uncertain:!accepted,
-      material:accepted?result.material:undefined,label:materials.map(m=>materialNames[m]||m).join(" · "),
-      candidates,
-      detail:accepted?`재질 후보: ${materialNames[result.material]}. 실제 품목과 재질 표시를 확인해 주세요.`:
-      disagreement?`전체 사진과 확대 사진의 판단이 달라요 (${materials.map(m=>materialNames[m]).join(" / ")}). 아래 후보에서 실제 물건을 골라 주세요. 병을 화면 가운데 크게 담으면 배경 영향을 줄일 수 있어요.`:
-      `확신이 낮은 재질 후보: ${materials.map(m=>materialNames[m]).join(" / ")}. 아래에서 실제 품목을 확인하거나 물건을 가운데 크게 놓고 다시 찍어 주세요.`};
-  } catch {
+    // The held-out evaluation uses this same full-frame feature. An unevaluated
+    // center crop no longer overrides a correct full-frame result.
+    return recognitionFromEmbedding(features.embedding,head,items);
+  }catch{
     return {...baseline,detail:baseline.detail+" 폐기물 전용 분류기를 불러오지 못해 기본 모델을 사용했어요."};
   }
 }

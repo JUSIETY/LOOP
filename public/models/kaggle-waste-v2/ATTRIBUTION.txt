@@ -1,0 +1,29 @@
+LOOP three-source waste classifier, trained 2026-10-22.
+
+Backbone: ImageNet-pretrained MobileNet V2, TensorFlow.js model, Google.
+Only the downstream classification heads are newly trained.
+
+Trashbox V2 Cleaned Waste Dataset, Ghaniahmadzai, version 1.
+https://www.kaggle.com/datasets/ghaniahmadzai/trashbox-v2-cleaned-modified
+License identified by Kaggle: Creative Commons Attribution 4.0 International.
+https://creativecommons.org/licenses/by/4.0/
+Changes: image selection, resizing, deduplication, relabeling into documented
+object/material groups, grouped splitting and learned classification weights.
+
+TriCascade WasteImage Dataset, Salam035 and cited authors, version 1.
+https://www.kaggle.com/datasets/salam035/waste-datasets
+Kaggle license metadata: MIT.
+Nahiduzzaman et al., An Automated Waste Classification System Using Deep Learning
+Techniques: Toward Efficient Waste Recycling and Environmental Sustainability,
+Knowledge-Based Systems, 2025. https://doi.org/10.1016/j.knosys.2025.113028
+Uses only the third-stage original object labels. The dataset aggregates TrashBox,
+waste_picture, Garbage Classification and a dead-animal image dataset.
+
+Recyclable and Household Waste Classification, Alistair King, version 1.
+https://www.kaggle.com/datasets/alistairking/recyclable-and-household-waste-classification
+Kaggle license metadata: MIT. The author's description additionally specifies
+educational, research and noncommercial use. Used for this educational school booth.
+
+Raw dataset photographs are not distributed by this Site. No endorsement by dataset
+authors is implied. Complete source counts, exclusions, SHA-256 download hashes,
+training settings and held-out evaluation are in report.json.
