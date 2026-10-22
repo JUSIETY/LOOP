@@ -1,6 +1,7 @@
 "use client";
 
-import {loadWasteHead,predictWaste,materialNames,type WasteHead} from "./kaggle-classifier";
+import {loadWasteHead,predictWaste,type WasteHead} from "./kaggle-classifier";
+import {objectCandidateLabel,categoryCandidateLabel,boothCandidateLabel,candidateMaterial} from "./recognition-labels";
 import type { MobileNet } from "@tensorflow-models/mobilenet";
 
 export type VisionItem = { id: string; name: string; emoji?: string };
@@ -171,7 +172,7 @@ export function baselinePrediction(predictions: BaselineClass[], items: VisionIt
   const best = ranked[0];
   const accepted = !!best && best[1] >= 0.45 && best[1]-(ranked[1]?.[1] || 0) >= 0.15;
   return {itemId: accepted ? best[0] : null, confidence: Math.min(1,best?.[1] || 0), source:"baseline",
-    label: predictions[0]?.className || "인식 결과 없음", needsConfirmation:true,
+    label: best ? boothCandidateLabel(best[0]) : "품목 확인 필요", needsConfirmation:true,
     candidates:ranked.slice(0,3).map(([itemId,score])=>({itemId,score})),
     detail:"물체 모양만 추정한 후보예요. 투명도·용도·재질·오염 상태 확인 전에는 배출 방법을 확정하지 않아요."};
 }
@@ -192,7 +193,7 @@ export function nearestPrediction(embedding: number[], train: VisionSample[], it
   const best=ranked[0];
   const accepted=ranked.length>=2 && best.score>=0.72 && best.score-ranked[1].score>=0.08;
   return {itemId:accepted?best.itemId:null,confidence:Math.max(0,Math.min(1,best?.score||0)),source:"custom",
-    label:best?items.find(i=>i.id===best.itemId)?.name||best.itemId:"학습 표본 부족",
+    label:best?boothCandidateLabel(best.itemId):"품목 확인 필요",
     needsConfirmation:true,candidates:ranked.slice(0,3),
     detail:accepted?"등록된 사진과 비슷한 품목을 찾았어요. 실제 재질과 오염 상태를 확인해 주세요.":"사진만으로 품목을 확정하기 어려워요. 실제 물건을 확인하고 직접 선택해 주세요."};
 }
@@ -213,7 +214,7 @@ export function recognitionFromEmbedding(embedding:number[],head:WasteHead,items
     const knownFine=fine.accepted&&!disagreement;
     const materialOnly=!knownFine&&coarse.accepted&&!disagreement;
     const status:Recognition["status"]=knownFine?"item":materialOnly?"material":"review";
-    const label=knownFine?head.names[fine.className]||fine.className:materialOnly?materialNames[coarse.className]||coarse.className:head.names[fine.className]||fine.className;
+    const label=materialOnly?categoryCandidateLabel(coarse.className):objectCandidateLabel(fine.className);
     const candidates:{itemId:string;score:number}[]=[];
     const add=(ids:string[],score:number)=>{for(const itemId of ids)if(items.some(i=>i.id===itemId)&&!candidates.some(c=>c.itemId===itemId))candidates.push({itemId,score});};
     if(knownFine) add(fineIds[fine.className]||[],fine.score);
@@ -226,23 +227,30 @@ export function recognitionFromEmbedding(embedding:number[],head:WasteHead,items
     const itemId=knownFine&&items.some(i=>i.id===direct[fine.className])?direct[fine.className]:null;
     let detail:string;
     if(knownFine){
-      detail=`${label} 품목을 인식했어요. 실제 재질 표시와 내용물·오염 상태를 확인해 주세요.`;
-      if(fine.className==="plastic-bottle")detail="플라스틱병을 인식했어요. 무색·투명한 생수·음료 PET병인지 확인하고 아래에서 골라 주세요.";
-      if(fine.className==="carton")detail="종이팩을 인식했어요. 살균 우유팩인지 멸균팩인지 실제 표시를 확인해 주세요. 아래 살균 우유팩은 해당하는 경우에만 선택하세요.";
-      if(fine.className==="paper-cup")detail="종이컵을 인식했어요. 오염 상태는 사진만으로 확정하지 않아요. 아래 심하게 오염된 종이컵은 실제 상태가 맞을 때만 고르세요.";
-      if(fine.className==="glass-object"||fine.className==="glass-container")detail="유리 물품을 인식했어요. 음료 유리병인지 확인하고, 해당하는 경우에만 아래 품목을 선택하세요.";
-      if(!itemId&&!candidates.length)detail+= " 이 품목은 현재 챌린지의 준비 품목에 없어요. 한국 분리배출 도우미에서 확인해 주세요.";
+      detail=`${label} 형태로 보여요. 실제 재질 표시와 내용물·오염 상태를 확인해 주세요.`;
+      if(fine.className==="plastic-bottle")detail="플라스틱병 형태로 보여요. 무색·투명한 생수·음료 PET병인지 직접 확인하고 아래에서 골라 주세요.";
+      if(fine.className==="carton")detail="종이팩 형태로 보여요. 살균 우유팩인지 멸균팩인지 제품 표시를 직접 확인해 주세요.";
+      if(fine.className==="paper-cup")detail="종이컵 형태로 보여요. 오염 상태는 사진으로 확정하지 않아요. 아래 품목은 실제 상태가 맞을 때만 고르세요.";
+      if(fine.className==="glass-bottle"||fine.className==="glass-object"||fine.className==="glass-container")detail="유리 물품 형태로 보여요. 음료 유리병인지 직접 확인하고, 해당하는 경우에만 아래 품목을 선택하세요.";
+      if(["pesticide","detergent-bottle","aerosol","medicine","syringe","thermometer"].includes(fine.className))detail=`${label} 형태로 보여요. 제품명·내용물·용도는 사진으로 확정하지 않아요. 제품 표시와 재질을 직접 확인해 주세요.`;
+      if(!itemId&&!candidates.length)detail+= " 사진과 일치하는 품목을 직접 선택해 주세요. 해당 품목이 없으면 한국 분리배출 도우미에서 확인해 주세요.";
     }else if(materialOnly){
-      detail=`${label} 범주까지 추정했어요. 세부 품목을 확정하지 못했으니 실제 물건을 선택해 주세요.`;
+      detail=`${label} 분류 후보예요. 세부 품목과 용도는 확정하지 않아요. 제품 표시를 직접 확인하고 실제 물건을 선택해 주세요.`;
     }else if(disagreement){
-      detail=`품목 모양은 ${head.names[fine.className]} 후보지만 재질은 ${materialNames[coarse.className]}로 추정해요. 두 판단이 달라 확인이 필요해요.`;
+      detail="사진에서 모양과 재질을 일관되게 구분하지 못했어요. 제품 표시를 확인하고 실제 품목을 직접 선택해 주세요.";
     }else{
       const reason=fine.reason==="similarity"?"품목의 특징이 뚜렷하지 않아요":fine.reason==="margin"?"다른 품목과 비슷해 보여요":"품목을 확실하게 구분하기 어려워요";
-      detail=`${head.names[fine.className]} 후보를 찾았지만 ${reason}. 물건 하나를 크게 다시 찍거나 실제 품목을 직접 선택해 주세요.`;
+      detail=`${label} 후보지만 ${reason}. 물건 하나를 크게 다시 찍거나 실제 품목을 직접 선택해 주세요.`;
+    }
+    const alternatives:{label:string;score:number}[]=[];
+    for(const r of fine.ranked){
+      const name=objectCandidateLabel(r.className);
+      if(!alternatives.some(a=>a.label===name))alternatives.push({label:name,score:r.score});
+      if(alternatives.length===3)break;
     }
     return {itemId,confidence:materialOnly?coarse.score:fine.score,source:"kaggle",needsConfirmation:true,
-      status,uncertain:status==="review",material:knownFine?head.coarseMapping[fine.className]:materialOnly?coarse.className:undefined,
-      label,candidates:candidates.slice(0,4),alternatives:fine.ranked.slice(0,3).map(r=>({label:head.names[r.className]||r.className,score:r.score})),detail};
+      status,uncertain:status==="review",material:candidateMaterial(knownFine?head.coarseMapping[fine.className]:materialOnly?coarse.className:undefined),
+      label,candidates:candidates.slice(0,4),alternatives,detail};
 }
 
 export async function recognizeImage(image: ImageInput, items: VisionItem[], onStatus?: (message: string) => void): Promise<Recognition> {

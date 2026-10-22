@@ -6,11 +6,12 @@ import assert from 'node:assert/strict';
 
 const project=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const root=process.env.LOOP_LARGE_TRAINING_DIR||'/tmp/loop-large-training';
-for(const name of ['kaggle-classifier','vision']){
+for(const name of ['kaggle-classifier','recognition-labels','vision']){
   let code=ts.transpileModule(fs.readFileSync(path.join(project,`lib/${name}.ts`),'utf8'),{
     compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}
   }).outputText;
   code=code.replace('"./kaggle-classifier"','"./kaggle-classifier.mjs"');
+  code=code.replace('"./recognition-labels"','"./recognition-labels.mjs"');
   fs.writeFileSync(path.join(root,name+'.mjs'),code);
 }
 const {predictLinear,predictWaste}=await import(pathToFileURL(path.join(root,'kaggle-classifier.mjs')));
