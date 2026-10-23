@@ -3,7 +3,7 @@ export type LinearWasteHead = {
   minCosines: number[]; threshold: number; margin: number; temperature: number;
 };
 export type WasteHead = {
-  version: 2; model: string; fine: LinearWasteHead; coarse: LinearWasteHead;
+  version: 2 | 3; model: string; fine: LinearWasteHead; coarse: LinearWasteHead;
   names: Record<string,string>; coarseMapping: Record<string,string>;
 };
 export const materialNames: Record<string,string> = {
@@ -12,6 +12,10 @@ export const materialNames: Record<string,string> = {
   carton:'종이팩·멸균팩',textile:'의류',shoe:'신발',medical:'위생·의료용품',electronics:'전자제품',
   battery:'건전지·배터리',hazardous:'유해물질 용기',other:'기타 물품',foam:'스티로폼',
 };
+export const WASTE_MODEL_PATH='/models/kaggle-waste-v2';
+export function selectedWasteModel():'v2'|'v3'{try{return typeof localStorage!=='undefined'&&localStorage.getItem('loop-waste-model')==='v3'?'v3':'v2'}catch{return 'v2'}}
+export function selectWasteModel(version:'v2'|'v3'){localStorage.setItem('loop-waste-model',version);headPromise=null;}
+
 let headPromise: Promise<WasteHead> | null = null;
 function validLinear(head: LinearWasteHead) {
   if (!head || !Array.isArray(head.classes) || head.classes.length<2 || head.classes.length>100) return false;
@@ -23,10 +27,10 @@ function validLinear(head: LinearWasteHead) {
     head.temperature>0 && head.threshold>=0 && head.threshold<=1;
 }
 export async function loadWasteHead(): Promise<WasteHead> {
-  if (!headPromise) headPromise=fetch('/models/kaggle-waste-v2/head.json').then(async response=>{
+  if (!headPromise) headPromise=fetch('/models/kaggle-waste-'+selectedWasteModel()+'/head.json').then(async response=>{
     if (!response.ok) throw Error('폐기물 분류기 다운로드 실패');
     const head: WasteHead=await response.json();
-    if(head.version!==2 || head.model!=='mobilenet-v2-alpha1.0-1280' || !validLinear(head.fine) || !validLinear(head.coarse) || !head.names || !head.coarseMapping) throw Error('폐기물 분류기 형식 오류');
+    if(![2,3].includes(head.version) || head.model!=='mobilenet-v2-alpha1.0-1280' || !validLinear(head.fine) || !validLinear(head.coarse) || !head.names || !head.coarseMapping) throw Error('폐기물 분류기 형식 오류');
     return head;
   }).catch(error=>{headPromise=null;throw error;});
   return headPromise;

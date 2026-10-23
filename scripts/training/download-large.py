@@ -90,7 +90,7 @@ def download(source):
         manifest = dict(key=key, ref=ref, version=version, url='https://www.kaggle.com/datasets/' + ref,
                         title=metadata.get('title'), license=metadata.get('licenseName'),
                         archiveSha256=digest, archiveBytes=target.stat().st_size,
-                        rawImageEntries=len(images), folders=dict(folders), retrievedAt='2026-10-22')
+                        rawImageEntries=len(images), folders=dict(folders), retrievedAt=__import__('datetime').datetime.now(__import__('datetime').timezone.utc).date().isoformat())
         (ROOT / (key + '-manifest.json')).write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
         print(json.dumps({k: v for k, v in manifest.items() if k != 'folders'}, ensure_ascii=False), flush=True)
     return key
