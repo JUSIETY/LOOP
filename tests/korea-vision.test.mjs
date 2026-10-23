@@ -28,3 +28,16 @@ assert.notEqual(disposalRule('glass','other','national').destination,'유리병'
 assert.equal(disposalRule('carton','aseptic','national').local,true);
 assert.equal(disposalRule('battery','battery','national').destination,'폐전지·전용 수거');
 console.log('20 regression assertions passed (logic only; not image accuracy).');
+const {selectionItems,photoChoices}=await load('lib/item-options.ts');
+const {defaultConfig}=await load('lib/defaults.ts');
+const oldItems=defaultConfig.items.filter(i=>i.id!=='aseptic-carton');
+const options=selectionItems(oldItems);
+assert.equal(options.length,oldItems.length+1);
+assert.equal(oldItems.some(i=>i.id==='aseptic-carton'),false,'Old snapshots must not be mutated');
+assert.equal(selectionItems(options),options,'Existing carton configuration is preserved');
+assert.deepEqual(photoChoices(['milk-carton'],options).map(i=>i.id),['milk-carton','aseptic-carton']);
+assert.deepEqual(photoChoices(['pet-bottle','pet-bottle'],options).map(i=>i.id),['pet-bottle','plastic-container']);
+assert.deepEqual(photoChoices(['unknown'],options),[]);
+const custom=options.map(i=>i.id==='aseptic-carton'?{...i,category:'general',reason:'행사 기준'}:i);
+assert.equal(selectionItems(custom).find(i=>i.id==='aseptic-carton').reason,'행사 기준');
+console.log('7 item selection assertions passed.');

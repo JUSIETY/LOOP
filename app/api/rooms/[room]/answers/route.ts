@@ -1,10 +1,11 @@
+import {selectionItems} from '../../../../../lib/item-options';
 import { ApiError, answerInput, body, database, failure, getRoom, json } from '@/lib/game';
 import type {Config,RoomContext} from '@/lib/types';
 type AnswerRow={item_id:string;choice:string;correct:number;category:string;reason:string};
 export async function POST(request:Request,context:RoomContext){try{
  const room=await getRoom((await context.params).room);const input=answerInput(await body(request));const db=database();
  const session=await db.prepare('SELECT config FROM sessions WHERE id = ? AND room_id = ?').bind(input.sessionId,room.id).first<{config:string}>();if(!session)throw new ApiError(404,'참가 정보를 찾지 못했어요. 새로 시작해 주세요.');
- const config=JSON.parse(session.config) as Config;const item=config.items.find(i=>i.id===input.itemId);if(!item)throw new ApiError(400,'이 행사에서 준비한 품목을 선택해 주세요.');
+ const config=JSON.parse(session.config) as Config;const item=selectionItems(config.items).find(i=>i.id===input.itemId);if(!item)throw new ApiError(400,'이 행사에서 준비한 품목을 선택해 주세요.');
  const prior=await db.prepare('SELECT item_id, choice, correct, category, reason FROM answers WHERE session_id = ? AND round = ?').bind(input.sessionId,input.round).first<AnswerRow>();
  if(prior && (prior.item_id!==input.itemId||prior.choice!==input.choice))throw new ApiError(409,'이미 채점한 문제예요. 다음 문제로 진행해 주세요.');
  if(!prior){

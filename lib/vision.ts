@@ -203,12 +203,12 @@ export function recognitionFromEmbedding(embedding:number[],head:WasteHead,items
     const fineIds:Record<string,string[]>={
       "drink-can":["drink-can"],cardboard:["cardboard"],"glass-bottle":["glass-bottle"],
       "plastic-container":["plastic-container"],"plastic-bottle":["pet-bottle","plastic-container"],
-      "detergent-bottle":["plastic-container"],carton:["milk-carton"],"plastic-bag":["snack-wrapper"],
+      "detergent-bottle":["plastic-container"],carton:["milk-carton","aseptic-carton"],"plastic-bag":["snack-wrapper"],
       "paper-cup":["dirty-paper-cup"],"glass-container":["glass-bottle"],"glass-object":["glass-bottle"],
     };
     const coarseIds:Record<string,string[]>={
       cardboard:["cardboard"],glass:["glass-bottle"],metal:["drink-can"],
-      plastic:["pet-bottle","plastic-container"],carton:["milk-carton"],vinyl:["snack-wrapper"],
+      plastic:["pet-bottle","plastic-container"],carton:["milk-carton","aseptic-carton"],vinyl:["snack-wrapper"],
       paper:["cardboard","milk-carton","dirty-paper-cup"],
     };
     const knownFine=fine.accepted&&!disagreement;
