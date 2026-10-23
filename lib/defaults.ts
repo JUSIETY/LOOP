@@ -11,5 +11,5 @@ export const categories = [
  {id:'general',name:'일반쓰레기',icon:'🗑️',color:'#edeae5'},
 ];
 export const categoryName=(id:string)=>categories.find(c=>c.id===id)?.name||id;
-export const defaultConfig:Config={title:'우리 학교 그린 부스',region:'학교·지역 기준 설정 전',sourceUrl:content.sources[0].url,verified:false,items:content.items.map(i=>({id:i.id,name:i.name,emoji:i.emoji,category:i.category,reason:i.method+' '+i.reason,tip:i.hint})) as Item[]};
+export const defaultConfig:Config={title:'우리 학교 그린 부스',region:'현장 수거 기준 확인 필요',sourceUrl:content.sources[0].url,verified:false,items:content.items.map(i=>({id:i.id,name:i.name,emoji:i.emoji,category:i.category,reason:i.method+' '+i.reason,tip:i.hint})) as Item[]};
 export {content};
