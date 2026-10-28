@@ -3,6 +3,7 @@
 import {loadWasteHead,predictWaste,type WasteHead} from "./kaggle-classifier";
 import {objectCandidateLabel,categoryCandidateLabel,boothCandidateLabel,candidateMaterial} from "./recognition-labels";
 import type { MobileNet } from "@tensorflow-models/mobilenet";
+import { publicAsset } from "./runtime";
 
 export type VisionItem = { id: string; name: string; emoji?: string };
 export type ImageInput = HTMLImageElement | HTMLCanvasElement | HTMLVideoElement | ImageData;
@@ -122,7 +123,7 @@ export async function loadVision(onStatus?: (message: string) => void): Promise<
       await tf.ready();
       onStatus?.("사진 인식을 준비하고 있어요…");
       const mobilenet = await import("@tensorflow-models/mobilenet");
-      const model = await mobilenet.load({ version: 2, alpha: 1.0, modelUrl: "/models/mobilenet/model.json", inputRange: [0, 1] });
+      const model = await mobilenet.load({ version: 2, alpha: 1.0, modelUrl: publicAsset("models/mobilenet/model.json"), inputRange: [0, 1] });
       onStatus?.("AI 모델 준비 완료");
       return model;
     })();

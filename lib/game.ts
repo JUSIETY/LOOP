@@ -1,13 +1,13 @@
 import { env } from 'cloudflare:workers';
 import { CATEGORY_IDS, type Config } from './types';
+import { isAllowedRequestOrigin } from './api-cors';
 
 export class ApiError extends Error { constructor(public status:number,message:string){super(message);} }
 export function database(){if(!env.DB)throw new ApiError(503,'기록 서버를 준비 중입니다. 잠시 후 다시 시도해 주세요.');return env.DB;}
 export function json(value:unknown,status=200){return Response.json(value,{status,headers:{'Cache-Control':'no-store'}});}
 export function failure(error:unknown){if(error instanceof ApiError)return json({error:error.message},error.status);console.error('LOOP request failed',error instanceof Error ? error.message : 'unknown');return json({error:'서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.'},500);}
 export async function body(request:Request){
- const origin=request.headers.get('origin');
- if(origin && origin!==new URL(request.url).origin)throw new ApiError(403,'같은 사이트에서 요청해 주세요.');
+ if(!isAllowedRequestOrigin(request))throw new ApiError(403,'허용된 사이트에서 요청해 주세요.');
  const data=await request.text();if(data.length>50000)throw new ApiError(413,'입력 데이터가 너무 큽니다.');
  try{const value=JSON.parse(data);if(!value||typeof value!=='object'||Array.isArray(value))throw new Error();return value as Record<string,unknown>;}catch{throw new ApiError(400,'입력 형식을 확인해 주세요.');}
 }

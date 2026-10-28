@@ -1,4 +1,5 @@
 "use client";
+import { publicAsset } from '../lib/runtime';
 import {useEffect,useState} from 'react';
 import {materialNames,selectedWasteModel,selectWasteModel} from '../lib/kaggle-classifier';
 type Metrics={classes:string[];splitCounts:Record<string,number>;testAccuracy:number;testCount:number;acceptedCount:number;acceptedAccuracy:number|null;coverage:number;perClass:Record<string,{precision:number;recall:number;support:number}>};
@@ -9,7 +10,7 @@ export default function KaggleReport(){
  const [model,setModel]=useState<'v2'|'v3'>('v2');
  useEffect(()=>setModel(selectedWasteModel()),[]);
  const [report,setReport]=useState<Report|null>(null),[error,setError]=useState(false);
- useEffect(()=>{let active=true;fetch('/models/kaggle-waste-v3/report.json').then(r=>{if(!r.ok)throw Error();return r.json() as Promise<Report>}).then(r=>{if(active)setReport(r)}).catch(()=>{if(active)setError(true)});return()=>{active=false}},[]);
+ useEffect(()=>{let active=true;fetch(publicAsset('models/kaggle-waste-v3/report.json')).then(r=>{if(!r.ok)throw Error();return r.json() as Promise<Report>}).then(r=>{if(active)setReport(r)}).catch(()=>{if(active)setError(true)});return()=>{active=false}},[]);
  const pct=(n:number|null)=>n===null?'—':(n*100).toFixed(1)+'%';
  return <section className="lab-panel"><div className="lab-smallcaps">KAGGLE {report?`${report.sources.length}종`:""} · 학습 및 별도 평가</div><h3>추가 학습 모델 비교</h3><p className="lab-note">추가 학습은 완료됐지만 같은 기존 평가 사진의 전체 정확도는 낮아졌어요. 기본 모델을 유지하며, 확장 모델은 직접 선택해 비교할 수 있어요. 확장 모델은 판단을 더 자주 보류합니다.</p><label>사용할 인식 모델 <select value={model} onChange={e=>{const value=e.target.value as 'v2'|'v3';try{selectWasteModel(value);setModel(value)}catch{alert('브라우저 저장을 허용해야 모델을 변경할 수 있어요.')}}}><option value="v2">기본 모델 · 기존 3종 자료</option><option value="v3">확장 모델 · 7종 자료 / 비교용</option></select></label><p className="lab-note">이 브라우저에서 다음 사진을 인식할 때부터 적용돼요. 아래는 확장 모델의 평가 보고서입니다.</p><p>MobileNet V2가 이미지 특징을 추출하고, 새로 학습한 두 분류기가 세부 품목과 재질을 판단해요. 카메라 사진은 브라우저에서 처리해요. 아래 수치는 학습에 사용하지 않은 Kaggle 사진의 내부 평가 결과예요.</p>
  {!report?<p role="status">{error?'평가 보고서를 불러오지 못했어요. 새로고침해 주세요.':'평가 보고서를 불러오는 중…'}</p>:<>
@@ -20,7 +21,7 @@ export default function KaggleReport(){
  {report.previousModelComparison&&<div className="lab-table-wrap"><table className="lab-table"><caption>동일한 기존 평가 사진으로 비교 · 전체 사진 정확도</caption><thead><tr><th>구분</th><th>평가 사진</th><th>이전 모델</th><th>추가 학습 모델</th></tr></thead><tbody>{Object.entries(report.previousModelComparison.metrics).map(([kind,m])=><tr key={kind}><td>{kind==='fine'?'품목':'재질'}</td><td>{m.v2.count.toLocaleString()}</td><td>{pct(m.v2.accuracy)}</td><td>{pct(m.v3.accuracy)}</td></tr>)}</tbody></table><p className="lab-note">두 모델에 같은 사진과 정답을 사용했어요. 아래 전체 평가에는 새 자료도 포함되므로 비교표의 평가 집합과 달라요.</p></div>}
  <details><summary>품목별 평가 결과</summary><div className="lab-table-wrap"><table className="lab-table"><thead><tr><th>품목</th><th>평가 사진</th><th>정밀도</th><th>재현율</th></tr></thead><tbody>{report.fine.classes.map(c=><tr key={c}><td>{report.names[c]||materialNames[c]||c}</td><td>{report.fine.perClass[c].support}</td><td>{pct(report.fine.perClass[c].precision)}</td><td>{pct(report.fine.perClass[c].recall)}</td></tr>)}</tbody></table></div></details>
  <p className="lab-note">비슷한 사진 묶음은 학습·검증·평가 중 한 곳에만 넣었어요. 물체 고유번호가 없어 모든 관련 사진의 중복을 보장해서 제거할 수는 없어요. 한국 현장 사진의 정확도, 투명도·오염 상태·지역별 수거 가능 여부는 별도로 확인해야 해요. Household 자료는 교육·연구·비상업 사용 조건도 명시하고 있어 학교 체험용으로 사용해요.</p>
- <div className="lab-actions"><a className="lab-button" href="/models/kaggle-waste-v3/report.json" download>전체 평가 보고서 JSON</a></div>
+ <div className="lab-actions"><a className="lab-button" href={publicAsset('models/kaggle-waste-v3/report.json')} download>전체 평가 보고서 JSON</a></div>
  </>}
  </section>;
 }
