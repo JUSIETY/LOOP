@@ -2,7 +2,7 @@
 
 카메라로 폐품을 확인하고 배출 방법을 고르는 한국어 체험 부스입니다. 참가자의 점수와 자주 틀리는 품목을 확인하고, 직접 모은 이미지로 인식 성능을 비교할 수 있습니다.
 
-- **사이트:** https://jusiety.github.io/loop-ai-recycling/
+- **사이트:** https://jusiety.github.io/LOOP/
 - **실행:** `npm ci` 후 `npm run dev:pages`
 - **배포 파일 갱신:** `npm run build:pages && npm run verify:pages` 후 `docs/`와 소스를 함께 커밋합니다.
 - **GitHub Pages 설정:** `main` 브랜치의 `/docs` 폴더를 배포합니다.
