@@ -22,7 +22,7 @@ export type VisionSample = {
 export type Recognition = {
   itemId: string | null;
   confidence: number;
-  source: "custom" | "baseline" | "kaggle";
+  source: "custom" | "baseline" | "kaggle" | "chatgpt-web";
   material?: string;
   uncertain?: boolean;
   status?: "item" | "material" | "review";

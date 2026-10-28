@@ -12,7 +12,7 @@ export default defineConfig({
   },
   define: {
     "import.meta.env.VITE_API_BASE": JSON.stringify(
-      process.env.VITE_API_BASE || "https://loop-ai-recycling-20261021.peppylion1.chatgpt.site",
+      process.env.VITE_API_BASE || "https://loop-ai-recycling-20261021.dreamhun07.chatgpt.site",
     ),
   },
   build: {
